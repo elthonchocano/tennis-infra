@@ -1,0 +1,6 @@
+# terraform.tfvars.example
+aws_region           = "us-east-1"
+google_client_id     = "your-id-here"
+google_client_secret = "your-secret-here"
+db_password          = "secure-password-here"
+github_username      = "your-github-username"

@@ -1,0 +1,13 @@
+# Local variable files
+*.tfvars
+*.tfvars.json
+
+# Terraform runtime directories and state
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# OS generated files
+.DS_Store
+Thumbs.db
