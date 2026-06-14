@@ -2,7 +2,6 @@
 # 1. NETWORKING (VPC & SUBNETS)
 # ==========================================
 
-# Fetch available AWS Availability Zones in the current region
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -76,7 +75,6 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
-
 # ==========================================
 # 2. SECURITY GROUPS (FIREWALLS)
 # ==========================================
@@ -97,10 +95,12 @@ resource "aws_security_group" "lambda_sg" {
 
 resource "aws_security_group" "db_sg" {
   name        = "tennis-database-security-group"
-  description = "Firewall rules for the Aurora PostgreSQL cluster"
+  description = "Firewall rules for the PostgreSQL database instance"
   vpc_id      = aws_vpc.main.id
 
+  # Mantenemos la regla AQUÍ ADENTRO para que absorba la que ya existe en AWS
   ingress {
+    description     = "Allow PostgreSQL traffic from tennis-backend Lambda"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
@@ -115,7 +115,6 @@ resource "aws_security_group" "db_sg" {
   }
   tags = { Name = "tennis-database-sg" }
 }
-
 
 # ==========================================
 # 3. IDENTITY (AWS COGNITO + GOOGLE AUTH)
@@ -152,21 +151,20 @@ resource "aws_cognito_identity_provider" "google" {
 }
 
 resource "aws_cognito_user_pool_client" "client" {
-  name                         = "tennis-frontend-client"
-  user_pool_id                 = aws_cognito_user_pool.pool.id
-  allowed_oauth_flows          = ["code", "implicit"]
+  name                                 = "tennis-frontend-client"
+  user_pool_id                         = aws_cognito_user_pool.pool.id
+  allowed_oauth_flows                  = ["code", "implicit"]
   allowed_oauth_flows_user_pool_client = true
-  allowed_oauth_scopes         = ["phone", "email", "openid", "profile", "aws.cognito.signin.user.admin"]
-  callback_urls                = ["http://${var.app_domain}/", "https://${aws_cloudfront_distribution.cdn.domain_name}/"]
-  logout_urls                  = ["http://${var.app_domain}/"]
-  supported_identity_providers = ["COGNITO", "Google"]
+  allowed_oauth_scopes                 = ["phone", "email", "openid", "profile", "aws.cognito.signin.user.admin"]
+  callback_urls                        = ["http://${var.app_domain}/", "https://${aws_cloudfront_distribution.cdn.domain_name}/"]
+  logout_urls                          = ["http://${var.app_domain}/"]
+  supported_identity_providers         = ["COGNITO", "Google"]
 
   depends_on = [aws_cognito_identity_provider.google]
 }
 
-
 # ==========================================
-# 4. DATABASE (AURORA SERVERLESS V2)
+# 4. DATABASE (STANDARD RDS POSTGRES - FREE TIER)
 # ==========================================
 
 resource "aws_db_subnet_group" "db_subnets" {
@@ -174,31 +172,24 @@ resource "aws_db_subnet_group" "db_subnets" {
   subnet_ids = aws_subnet.private[*].id
 }
 
-resource "aws_rds_cluster" "aurora" {
-  cluster_identifier     = "tennis-aurora-postgres-cluster"
-  engine                 = "aurora-postgresql"
-  engine_mode            = "provisioned"
-  engine_version         = "15.4"
-  database_name          = "tennis_league"
-  master_username        = var.db_username
-  master_password        = var.db_password
+resource "aws_db_instance" "postgres" {
+  identifier            = "tennis-postgres-free-tier"
+  engine                = "postgres"
+  engine_version        = "18.1"
+  instance_class        = "db.t3.micro"
+  allocated_storage     = 20
+  max_allocated_storage = 50
+  storage_type          = "gp3"
+
+  db_name                = "tennis_league"
+  username               = var.db_username
+  password               = var.db_password
   db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   skip_final_snapshot    = true
 
-  serverlessv2_scaling_configuration {
-    min_capacity = 0.5
-    max_capacity = 2.0
-  }
+  tags = { Name = "tennis-postgres-instance" }
 }
-
-resource "aws_rds_cluster_instance" "aurora_instance" {
-  cluster_identifier = aws_rds_cluster.aurora.id
-  instance_class     = "db.serverless.dsg1.micro"
-  engine             = aws_rds_cluster.aurora.engine
-  engine_version     = aws_rds_cluster.aurora.engine_version
-}
-
 
 # ==========================================
 # 5. COMPUTE (AWS LAMBDA + API GATEWAY)
@@ -227,7 +218,7 @@ resource "aws_lambda_function" "api" {
   function_name = "tennis-backend-api"
   role          = aws_iam_role.lambda_role.arn
   handler       = "io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest"
-  runtime       = "java17"
+  runtime       = "java21"
   timeout       = 30
   memory_size   = 512
 
@@ -238,17 +229,14 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DB_HOST                           = aws_rds_cluster.aurora.endpoint
-      DB_PORT                           = "5432"
-      DB_NAME                           = aws_rds_cluster.aurora.database_name
-      DB_USERNAME                       = var.db_username
-      DB_PASSWORD                       = var.db_password
-      FRONTEND_URL                      = "https://${aws_cloudfront_distribution.cdn.domain_name}"
-      AWS_REGION                        = var.aws_region
-      COGNITO_USER_POOL_ID              = aws_cognito_user_pool.pool.id
-      COGNITO_CLIENT_ID                 = aws_cognito_user_pool_client.client.id
-      QUARKUS_FLYWAY_MIGRATE_AT_START   = "false"
-      QUARKUS_SWAGGER_UI_ALWAYS_INCLUDE = "false"
+      DB_HOST              = aws_db_instance.postgres.address
+      DB_PORT              = "5432"
+      DB_NAME              = aws_db_instance.postgres.db_name
+      DB_USERNAME          = var.db_username
+      DB_PASSWORD          = var.db_password
+      FRONTEND_URL         = "https://${aws_cloudfront_distribution.cdn.domain_name}"
+      COGNITO_USER_POOL_ID = aws_cognito_user_pool.pool.id
+      COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.client.id
     }
   }
 }
@@ -262,7 +250,7 @@ resource "aws_apigatewayv2_integration" "lambda_int" {
   api_id                 = aws_apigatewayv2_api.http_api.id
   integration_type       = "AWS_PROXY"
   integration_uri        = aws_lambda_function.api.arn
-  payload_format_version = "2.0"
+  payload_format_version = "1.0"
 }
 
 resource "aws_apigatewayv2_route" "route" {
@@ -284,7 +272,6 @@ resource "aws_lambda_permission" "apigw" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }
-
 
 # ==========================================
 # 6. STATIC FRONTEND HOSTING (S3 + CLOUDFRONT)
@@ -385,7 +372,6 @@ resource "aws_s3_bucket_policy" "policy" {
 # 7. CI/CD AUTOMATION (TWO SEPARATE PIPELINES)
 # ==========================================
 
-# IAM Roles and Policies (Shared by both pipelines)
 resource "aws_iam_role" "pipeline_role" {
   name = "tennis-codepipeline-role"
 
@@ -464,6 +450,28 @@ resource "aws_iam_role_policy" "build_policy" {
         Effect   = "Allow"
         Action   = ["cloudfront:CreateInvalidation"]
         Resource = "*"
+      },
+      {
+        Sid    = "CodeBuildVPCAccess"
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeDhcpOptions"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "CodeBuildVPCENIPermissions"
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterfacePermission"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -500,11 +508,37 @@ resource "aws_codebuild_project" "backend_build" {
       name  = "LAMBDA_FUNCTION_NAME"
       value = aws_lambda_function.api.function_name
     }
+
+    environment_variable {
+      name  = "DB_HOST"
+      value = aws_db_instance.postgres.address
+    }
+
+    environment_variable {
+      name  = "DB_NAME"
+      value = aws_db_instance.postgres.db_name
+    }
+
+    environment_variable {
+      name  = "DB_USERNAME"
+      value = var.db_username
+    }
+
+    environment_variable {
+      name  = "DB_PASSWORD"
+      value = var.db_password
+    }
   }
 
   source {
     type      = "CODEPIPELINE"
-    buildspec = "buildspec.yml" # Located at the root of the tennis-backend repo
+    buildspec = "buildspec.yml"
+  }
+
+  vpc_config {
+    vpc_id             = aws_vpc.main.id
+    subnets            = aws_subnet.private[*].id
+    security_group_ids = [aws_security_group.lambda_sg.id]
   }
 }
 
@@ -585,7 +619,7 @@ resource "aws_codebuild_project" "frontend_build" {
 
   source {
     type      = "CODEPIPELINE"
-    buildspec = "buildspec.yml" # Located at the root of the tennis-frontend repo
+    buildspec = "buildspec.yml"
   }
 }
 

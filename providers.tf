@@ -12,4 +12,10 @@ terraform {
 # Configure the AWS Provider region
 provider "aws" {
   region = var.aws_region
+  default_tags {
+    tags = {
+      Project   = "TLM - App"
+      ManagedBy = "Terraform"
+    }
+  }
 }
