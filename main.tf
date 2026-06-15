@@ -150,6 +150,13 @@ resource "aws_cognito_user_group" "admin_group" {
   precedence   = 1
 }
 
+resource "aws_cognito_user_group" "super_admin_group" {
+  name         = "super-admin"
+  user_pool_id = aws_cognito_user_pool.pool.id
+  description  = "Super Admin Group with full system access"
+  precedence   = 0
+}
+
 resource "aws_cognito_identity_provider" "google" {
   user_pool_id  = aws_cognito_user_pool.pool.id
   provider_name = "Google"
