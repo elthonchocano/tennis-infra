@@ -124,6 +124,16 @@ resource "aws_cognito_user_pool" "pool" {
   name                     = "tennis-user-pool"
   auto_verified_attributes = ["email"]
 
+  schema {
+    attribute_data_type = "String"
+    name                = "phone_number"
+    mutable             = true
+    string_attribute_constraints {
+      min_length = 7
+      max_length = 15
+    }
+  }
+
   password_policy {
     minimum_length    = 8
     require_lowercase = true
@@ -131,6 +141,13 @@ resource "aws_cognito_user_pool" "pool" {
     require_symbols   = true
     require_uppercase = true
   }
+}
+
+resource "aws_cognito_user_group" "admin_group" {
+  name         = "admin"
+  user_pool_id = aws_cognito_user_pool.pool.id
+  description  = "System Admin Group"
+  precedence   = 1
 }
 
 resource "aws_cognito_identity_provider" "google" {
@@ -156,11 +173,16 @@ resource "aws_cognito_user_pool_client" "client" {
   allowed_oauth_flows                  = ["code", "implicit"]
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_scopes                 = ["phone", "email", "openid", "profile", "aws.cognito.signin.user.admin"]
-  callback_urls                        = ["http://${var.app_domain}/", "https://${aws_cloudfront_distribution.cdn.domain_name}/"]
-  logout_urls                          = ["http://${var.app_domain}/"]
+  callback_urls                        = ["https://${aws_cloudfront_distribution.cdn.domain_name}/"]
+  logout_urls                          = ["https://${aws_cloudfront_distribution.cdn.domain_name}/"]
   supported_identity_providers         = ["COGNITO", "Google"]
 
   depends_on = [aws_cognito_identity_provider.google]
+}
+
+resource "aws_cognito_user_pool_domain" "main" {
+  domain       = "tennis-league-manager"
+  user_pool_id = aws_cognito_user_pool.pool.id
 }
 
 # ==========================================
@@ -393,8 +415,16 @@ resource "aws_iam_role_policy" "pipeline_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:GetObjectVersion", "s3:GetBucketVersioning", "s3:PutObjectAcl", "s3:PutObject"]
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:GetBucketVersioning",
+          "s3:PutObjectAcl",
+          "s3:PutObject",
+          "s3:ListBucket",
+          "s3:DeleteObject"
+        ]
         Resource = [aws_s3_bucket.pipeline_bucket.arn, "${aws_s3_bucket.pipeline_bucket.arn}/*"]
       },
       {
@@ -437,9 +467,20 @@ resource "aws_iam_role_policy" "build_policy" {
         Resource = "*"
       },
       {
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
-        Resource = ["*"]
+        Effect = "Allow"
+        Action = ["s3:GetObject", "s3:GetObjectVersion", "s3:ListBucket"]
+        Resource = [
+          aws_s3_bucket.pipeline_bucket.arn,
+          "${aws_s3_bucket.pipeline_bucket.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:DeleteObject"]
+        Resource = [
+          aws_s3_bucket.frontend.arn,
+          "${aws_s3_bucket.frontend.arn}/*"
+        ]
       },
       {
         Effect   = "Allow"
@@ -466,11 +507,9 @@ resource "aws_iam_role_policy" "build_policy" {
         Resource = "*"
       },
       {
-        Sid    = "CodeBuildVPCENIPermissions"
-        Effect = "Allow"
-        Action = [
-          "ec2:CreateNetworkInterfacePermission"
-        ]
+        Sid      = "CodeBuildVPCENIPermissions"
+        Effect   = "Allow"
+        Action   = ["ec2:CreateNetworkInterfacePermission"]
         Resource = "*"
       }
     ]
@@ -608,12 +647,28 @@ resource "aws_codebuild_project" "frontend_build" {
       value = aws_apigatewayv2_stage.stage.invoke_url
     }
     environment_variable {
+      name  = "VITE_AUTH_CLIENT_ID"
+      value = aws_cognito_user_pool_client.client.id
+    }
+    environment_variable {
+      name  = "VITE_APP_VERSION"
+      value = "v1.0.0"
+    }
+    environment_variable {
       name  = "FRONTEND_S3_BUCKET"
       value = aws_s3_bucket.frontend.id
     }
     environment_variable {
       name  = "CLOUDFRONT_DIST_ID"
       value = aws_cloudfront_distribution.cdn.id
+    }
+    environment_variable {
+      name  = "VITE_AUTH_STRATEGY"
+      value = "cognito"
+    }
+    environment_variable {
+      name  = "VITE_AUTH_SERVER_URL"
+      value = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com"
     }
   }
 
