@@ -11,43 +11,10 @@ module "networking" {
 # 2. SECURITY GROUPS (FIREWALLS)
 # ==========================================
 
-resource "aws_security_group" "lambda_sg" {
-  name        = "tennis-lambda-security-group"
-  description = "Firewall rules for the Quarkus reactive Lambda function"
-  vpc_id      = module.networking.vpc_id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = { Name = "tennis-lambda-sg" }
+module "security" {
+  source = "./modules/security"
+  vpc_id = module.networking.vpc_id
 }
-
-resource "aws_security_group" "db_sg" {
-  name        = "tennis-database-security-group"
-  description = "Firewall rules for the PostgreSQL database instance"
-  vpc_id      = module.networking.vpc_id
-
-  ingress {
-    description     = "Allow PostgreSQL traffic from tennis-backend Lambda"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda_sg.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = { Name = "tennis-database-sg" }
-}
-
-
 
 # ==========================================
 # 3. IDENTITY (AWS COGNITO + GOOGLE AUTH)
@@ -147,7 +114,7 @@ resource "aws_db_instance" "postgres" {
   username               = var.db_username
   password               = var.db_password
   db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
-  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  vpc_security_group_ids = [module.security.db_sg_id]
   skip_final_snapshot    = true
 
   backup_retention_period = 7
@@ -197,7 +164,7 @@ resource "aws_lambda_function" "api" {
 
   vpc_config {
     subnet_ids         = module.networking.private_subnet_ids
-    security_group_ids = [aws_security_group.lambda_sg.id]
+    security_group_ids = [module.security.lambda_sg_id]
   }
 
   environment {
@@ -532,7 +499,7 @@ resource "aws_codebuild_project" "backend_build" {
   vpc_config {
     vpc_id             = module.networking.vpc_id
     subnets            = module.networking.private_subnet_ids
-    security_group_ids = [aws_security_group.lambda_sg.id]
+    security_group_ids = [module.security.lambda_sg_id]
   }
 }
 
