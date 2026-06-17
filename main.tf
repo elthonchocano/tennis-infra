@@ -2,77 +2,9 @@
 # 1. NETWORKING (VPC & SUBNETS)
 # ==========================================
 
-data "aws_availability_zones" "available" {
-  state = "available"
-}
-
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-  tags                 = { Name = "tennis-vpc" }
-}
-
-resource "aws_subnet" "public" {
-  count                   = 2
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.${count.index}.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
-  tags                    = { Name = "tennis-public-subnet-${count.index}" }
-}
-
-resource "aws_subnet" "private" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.${count.index + 10}.0/24"
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-  tags              = { Name = "tennis-private-subnet-${count.index}" }
-}
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.main.id
-  tags   = { Name = "tennis-igw" }
-}
-
-resource "aws_eip" "nat" {
-  domain = "vpc"
-}
-
-resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-  tags          = { Name = "tennis-nat-gateway" }
-}
-
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-  tags = { Name = "tennis-public-rt" }
-}
-
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat.id
-  }
-  tags = { Name = "tennis-private-rt" }
-}
-
-resource "aws_route_table_association" "public" {
-  count          = 2
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "private" {
-  count          = 2
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
+module "networking" {
+  source   = "./modules/networking"
+  vpc_cidr = "10.0.0.0/16"
 }
 
 # ==========================================
@@ -82,7 +14,7 @@ resource "aws_route_table_association" "private" {
 resource "aws_security_group" "lambda_sg" {
   name        = "tennis-lambda-security-group"
   description = "Firewall rules for the Quarkus reactive Lambda function"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = module.networking.vpc_id
 
   egress {
     from_port   = 0
@@ -96,9 +28,8 @@ resource "aws_security_group" "lambda_sg" {
 resource "aws_security_group" "db_sg" {
   name        = "tennis-database-security-group"
   description = "Firewall rules for the PostgreSQL database instance"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = module.networking.vpc_id
 
-  # Mantenemos la regla AQUÍ ADENTRO para que absorba la que ya existe en AWS
   ingress {
     description     = "Allow PostgreSQL traffic from tennis-backend Lambda"
     from_port       = 5432
@@ -115,6 +46,8 @@ resource "aws_security_group" "db_sg" {
   }
   tags = { Name = "tennis-database-sg" }
 }
+
+
 
 # ==========================================
 # 3. IDENTITY (AWS COGNITO + GOOGLE AUTH)
@@ -198,13 +131,13 @@ resource "aws_cognito_user_pool_domain" "main" {
 
 resource "aws_db_subnet_group" "db_subnets" {
   name       = "tennis-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
+  subnet_ids = module.networking.private_subnet_ids
 }
 
 resource "aws_db_instance" "postgres" {
   identifier            = "tennis-postgres-free-tier"
   engine                = "postgres"
-  engine_version        = "18.1"
+  engine_version        = "18.3"
   instance_class        = "db.t3.micro"
   allocated_storage     = 20
   max_allocated_storage = 50
@@ -216,6 +149,17 @@ resource "aws_db_instance" "postgres" {
   db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   skip_final_snapshot    = true
+
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  copy_tags_to_snapshot   = true
+
+  auto_minor_version_upgrade = true
+  maintenance_window         = "Mon:04:00-Mon:05:00"
+
+  lifecycle {
+    ignore_changes = [engine_version]
+  }
 
   tags = { Name = "tennis-postgres-instance" }
 }
@@ -252,7 +196,7 @@ resource "aws_lambda_function" "api" {
   memory_size   = 512
 
   vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
+    subnet_ids         = module.networking.private_subnet_ids
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
@@ -292,6 +236,10 @@ resource "aws_apigatewayv2_stage" "stage" {
   api_id      = aws_apigatewayv2_api.http_api.id
   name        = "$default"
   auto_deploy = true
+  default_route_settings {
+    throttling_burst_limit = 100
+    throttling_rate_limit  = 50
+  }
 }
 
 resource "aws_lambda_permission" "apigw" {
@@ -582,8 +530,8 @@ resource "aws_codebuild_project" "backend_build" {
   }
 
   vpc_config {
-    vpc_id             = aws_vpc.main.id
-    subnets            = aws_subnet.private[*].id
+    vpc_id             = module.networking.vpc_id
+    subnets            = module.networking.private_subnet_ids
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
 }
@@ -726,5 +674,36 @@ resource "aws_codepipeline" "frontend_pipeline" {
         ProjectName = aws_codebuild_project.frontend_build.name
       }
     }
+  }
+}
+
+# ==========================================
+# 8. MONITORING & ALERTS (CLOUDWATCH)
+# ==========================================
+
+resource "aws_sns_topic" "api_alerts" {
+  name = "tennis-api-alerts"
+}
+
+resource "aws_sns_topic_subscription" "email_alert" {
+  topic_arn = aws_sns_topic.api_alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_high_traffic" {
+  alarm_name          = "tennis-api-high-traffic-alert"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "Count"
+  namespace           = "AWS/ApiGateway"
+  period              = "3600"
+  statistic           = "Sum"
+  threshold           = "5000"
+  alarm_description   = "High traffic alarm on API Gateway"
+  alarm_actions       = [aws_sns_topic.api_alerts.arn]
+
+  dimensions = {
+    ApiId = aws_apigatewayv2_api.http_api.id
   }
 }
