@@ -1,10 +1,10 @@
 output "backend_api_url" {
-  value       = aws_apigatewayv2_stage.stage.invoke_url
+  value       = module.api_backend.api_invoke_url
   description = "The HTTP API Gateway URL to be configured as VITE_API_URL in the frontend"
 }
 
 output "frontend_url" {
-  value       = "https://${aws_cloudfront_distribution.cdn.domain_name}"
+  value       = "https://${module.frontend.cloudfront_domain_name}"
   description = "The public global URL of your deployed React application"
 }
 
