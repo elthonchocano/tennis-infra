@@ -92,43 +92,16 @@ resource "aws_cognito_user_pool_domain" "main" {
   user_pool_id = aws_cognito_user_pool.pool.id
 }
 
-# ==========================================
+# ===============================================
 # 4. DATABASE (STANDARD RDS POSTGRES - FREE TIER)
-# ==========================================
+# ===============================================
 
-resource "aws_db_subnet_group" "db_subnets" {
-  name       = "tennis-db-subnet-group"
-  subnet_ids = module.networking.private_subnet_ids
-}
-
-resource "aws_db_instance" "postgres" {
-  identifier            = "tennis-postgres-free-tier"
-  engine                = "postgres"
-  engine_version        = "18.3"
-  instance_class        = "db.t3.micro"
-  allocated_storage     = 20
-  max_allocated_storage = 50
-  storage_type          = "gp3"
-
-  db_name                = "tennis_league"
-  username               = var.db_username
-  password               = var.db_password
-  db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
-  vpc_security_group_ids = [module.security.db_sg_id]
-  skip_final_snapshot    = true
-
-  backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  copy_tags_to_snapshot   = true
-
-  auto_minor_version_upgrade = true
-  maintenance_window         = "Mon:04:00-Mon:05:00"
-
-  lifecycle {
-    ignore_changes = [engine_version]
-  }
-
-  tags = { Name = "tennis-postgres-instance" }
+module "database" {
+  source                = "./modules/database"
+  db_subnet_ids         = module.networking.private_subnet_ids
+  db_security_group_ids = [module.security.db_sg_id]
+  db_username           = var.db_username
+  db_password           = var.db_password
 }
 
 # ==========================================
@@ -169,9 +142,9 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DB_HOST              = aws_db_instance.postgres.address
+      DB_HOST              = module.database.db_address
+      DB_NAME              = module.database.db_name
       DB_PORT              = "5432"
-      DB_NAME              = aws_db_instance.postgres.db_name
       DB_USERNAME          = var.db_username
       DB_PASSWORD          = var.db_password
       FRONTEND_URL         = "https://${aws_cloudfront_distribution.cdn.domain_name}"
@@ -472,12 +445,12 @@ resource "aws_codebuild_project" "backend_build" {
 
     environment_variable {
       name  = "DB_HOST"
-      value = aws_db_instance.postgres.address
+      value = module.database.db_address
     }
 
     environment_variable {
       name  = "DB_NAME"
-      value = aws_db_instance.postgres.db_name
+      value = module.database.db_name
     }
 
     environment_variable {
