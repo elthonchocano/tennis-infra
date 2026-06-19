@@ -31,16 +31,6 @@ resource "aws_internet_gateway" "igw" {
   tags   = { Name = "tennis-igw" }
 }
 
-resource "aws_eip" "nat" {
-  domain = "vpc"
-}
-
-resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-  tags          = { Name = "tennis-nat-gateway" }
-}
-
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
   route {
@@ -52,11 +42,7 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat.id
-  }
-  tags = { Name = "tennis-private-rt" }
+  tags   = { Name = "tennis-private-rt" }
 }
 
 resource "aws_route_table_association" "public" {
@@ -69,4 +55,37 @@ resource "aws_route_table_association" "private" {
   count          = 2
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
+}
+
+resource "aws_security_group" "vpc_endpoints" {
+  name   = "vpc-endpoints-sg"
+  vpc_id = aws_vpc.main.id
+  tags   = { Name = "tennis-vpc-endpoints-sg" }
+}
+
+resource "aws_security_group_rule" "allow_lambda_to_endpoint" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.vpc_endpoints.id
+  source_security_group_id = var.lambda_sg_id
+}
+
+resource "aws_vpc_endpoint" "cognito_idp" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.region}.cognito-idp"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+}
+
+resource "aws_vpc_endpoint" "cognito_identity" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.region}.cognito-identity"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
 }
