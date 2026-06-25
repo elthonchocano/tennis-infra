@@ -47,3 +47,8 @@ variable "github_frontend_repo_name" {
   default     = "tennis-frontend"
   description = "The repository name for the React frontend application"
 }
+
+variable "alert_email" {
+  description = "Email address to receive infrastructure alerts"
+  type        = string
+}
