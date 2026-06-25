@@ -4,3 +4,10 @@ google_client_id     = "your-id-here"
 google_client_secret = "your-secret-here"
 db_password          = "secure-password-here"
 github_username      = "your-github-username"
+
+app_domain           = "your-domain"
+
+github_backend_repo_name  = "your-backend-repo"
+github_frontend_repo_name = "your-frontend-repo"
+
+alert_email = "your-email"

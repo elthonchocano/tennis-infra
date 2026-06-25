@@ -9,6 +9,6 @@ output "frontend_url" {
 }
 
 output "cognito_user_pool_id" {
-  value       = aws_cognito_user_pool.pool.id
+  value       = module.identity.user_pool_id
   description = "The AWS Cognito User Pool ID"
 }
