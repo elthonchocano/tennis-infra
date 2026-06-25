@@ -62,18 +62,18 @@ module "api_backend" {
   frontend_url       = "https://${module.frontend.cloudfront_domain_name}"
 }
 
-# ==========================================
+# ============================================
 # 6. STATIC FRONTEND HOSTING (S3 + CLOUDFRONT)
-# ==========================================
+# ============================================
 
 module "frontend" {
   source      = "./modules/frontend"
   bucket_name = "tennis-league-frontend-prod"
 }
 
-# ==========================================
+# ============================================
 # 7. CI/CD AUTOMATION (TWO SEPARATE PIPELINES)
-# ==========================================
+# ============================================
 
 module "cicd" {
   source = "./modules/cicd"
@@ -114,29 +114,8 @@ module "cicd" {
 # 8. MONITORING & ALERTS (CLOUDWATCH)
 # ==========================================
 
-resource "aws_sns_topic" "api_alerts" {
-  name = "tennis-api-alerts"
-}
-
-resource "aws_sns_topic_subscription" "email_alert" {
-  topic_arn = aws_sns_topic.api_alerts.arn
-  protocol  = "email"
-  endpoint  = var.alert_email
-}
-
-resource "aws_cloudwatch_metric_alarm" "api_high_traffic" {
-  alarm_name          = "tennis-api-high-traffic-alert"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "1"
-  metric_name         = "Count"
-  namespace           = "AWS/ApiGateway"
-  period              = "3600"
-  statistic           = "Sum"
-  threshold           = "5000"
-  alarm_description   = "High traffic alarm on API Gateway"
-  alarm_actions       = [aws_sns_topic.api_alerts.arn]
-
-  dimensions = {
-    ApiId = module.api_backend.api_id
-  }
+module "monitoring" {
+  source      = "./modules/monitoring"
+  alert_email = var.alert_email
+  api_id      = module.api_backend.api_id
 }
