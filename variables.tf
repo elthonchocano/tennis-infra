@@ -52,3 +52,15 @@ variable "alert_email" {
   description = "Email address to receive infrastructure alerts"
   type        = string
 }
+
+variable "budget_limit_value" {
+  description = "Defined monthly budget limit for the AWS account"
+  type        = number
+  default     = 35
+}
+
+variable "admin_email" {
+  description = "Administrator email for AWS budget notifications"
+  type        = string
+  default     = "your-email@example.com"
+}

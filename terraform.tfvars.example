@@ -11,3 +11,6 @@ github_backend_repo_name  = "your-backend-repo"
 github_frontend_repo_name = "your-frontend-repo"
 
 alert_email = "your-email"
+
+admin_email        = "your-email"
+budget_limit_value = 35
