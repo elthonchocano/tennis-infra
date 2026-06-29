@@ -5,7 +5,7 @@
 module "networking" {
   source       = "./modules/networking"
   vpc_cidr     = "10.0.0.0/16"
-  region       = "us-east-1"
+  region       = var.aws_region
   lambda_sg_id = module.security.lambda_sg_id
 }
 
@@ -46,6 +46,7 @@ module "database" {
 # ==========================================
 
 module "api_backend" {
+  region             = var.aws_region
   source             = "./modules/lambda_api"
   function_name      = "tennis-backend-api"
   filename           = "${path.root}/target/function.zip"
@@ -118,4 +119,13 @@ module "monitoring" {
   source      = "./modules/monitoring"
   alert_email = var.alert_email
   api_id      = module.api_backend.api_id
+}
+
+# ==========================================
+# 9. BUDGET ALERTS
+# ==========================================
+module "budget" {
+  source             = "./modules/budget"
+  budget_limit       = var.budget_limit_value
+  notification_email = var.admin_email
 }

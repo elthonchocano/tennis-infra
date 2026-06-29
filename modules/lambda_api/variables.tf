@@ -64,3 +64,8 @@ variable "frontend_url" {
   description = "The base URL of the frontend application (e.g., CloudFront distribution URL)"
   type        = string
 }
+
+variable "region" {
+  description = "The AWS region"
+  type        = string
+}
