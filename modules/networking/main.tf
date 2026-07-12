@@ -89,3 +89,12 @@ resource "aws_vpc_endpoint" "cognito_identity" {
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
 }
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.${var.region}.s3"
+
+  route_table_ids = [aws_route_table.private.id]
+
+  tags = { Name = "tennis-s3-endpoint" }
+}
