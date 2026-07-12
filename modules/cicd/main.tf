@@ -106,6 +106,12 @@ resource "aws_iam_role_policy" "build_policy" {
         Effect   = "Allow"
         Action   = ["ec2:CreateNetworkInterfacePermission"]
         Resource = "*"
+      },
+      {
+        Sid      = "CodeBuildS3ArtifactAccess"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.pipeline_bucket.arn}/builds/*"]
       }
     ]
   })
@@ -154,6 +160,10 @@ resource "aws_codebuild_project" "backend_build" {
     environment_variable {
       name  = "DB_PASSWORD"
       value = var.db_password
+    }
+    environment_variable {
+      name  = "PIPELINE_BUCKET_NAME"
+      value = aws_s3_bucket.pipeline_bucket.bucket
     }
   }
 

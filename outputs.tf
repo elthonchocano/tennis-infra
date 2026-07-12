@@ -12,3 +12,7 @@ output "cognito_user_pool_id" {
   value       = module.identity.user_pool_id
   description = "The AWS Cognito User Pool ID"
 }
+
+output "pipeline_bucket_name" {
+  value = module.cicd.pipeline_bucket_name
+}
