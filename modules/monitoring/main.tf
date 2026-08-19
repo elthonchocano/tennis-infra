@@ -8,19 +8,21 @@ resource "aws_sns_topic_subscription" "email_alert" {
   endpoint  = var.alert_email
 }
 
-resource "aws_cloudwatch_metric_alarm" "api_high_traffic" {
-  alarm_name          = "tennis-api-high-traffic-alert"
+resource "aws_cloudwatch_metric_alarm" "cloudfront_high_error_rate" {
+  alarm_name          = "tennis-frontend-high-error-rate"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
-  metric_name         = "Count"
-  namespace           = "AWS/ApiGateway"
-  period              = "3600"
-  statistic           = "Sum"
-  threshold           = "5000"
-  alarm_description   = "High traffic alarm on API Gateway"
+  metric_name         = "5xxErrorRate"
+  namespace           = "AWS/CloudFront"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "High 5xx error rate on CloudFront frontend distribution"
   alarm_actions       = [aws_sns_topic.api_alerts.arn]
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
-    ApiId = var.api_id
+    DistributionId = var.cloudfront_id
+    Region         = "Global"
   }
 }

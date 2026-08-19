@@ -3,7 +3,7 @@ variable "alert_email" {
   type        = string
 }
 
-variable "api_id" {
-  description = "The API Gateway ID to monitor"
+variable "cloudfront_id" {
+  description = "The Cloudfront ID to monitor"
   type        = string
 }

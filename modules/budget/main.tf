@@ -3,7 +3,6 @@ resource "aws_budgets_budget" "monthly_budget" {
   budget_type       = "COST"
   limit_amount      = var.budget_limit
   limit_unit        = "USD"
-  time_period_start = "2026-06-01_00:00"
   time_unit         = "MONTHLY"
 
   # Warning: Forecasted to hit 80%

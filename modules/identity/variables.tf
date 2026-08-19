@@ -1,3 +1,8 @@
+variable "aws_region" {
+  description = "The AWS region"
+  type        = string
+}
+
 variable "google_client_id" {
   description = "Google OAuth Client ID"
   type        = string

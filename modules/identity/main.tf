@@ -41,15 +41,9 @@ resource "aws_cognito_identity_provider" "google" {
   provider_type = "Google"
 
   provider_details = {
-    authorize_scopes              = "email profile openid"
-    client_id                     = var.google_client_id
-    client_secret                 = var.google_client_secret
-    attributes_url                = "https://people.googleapis.com/v1/people/me?personFields="
-    attributes_url_add_attributes = "true"
-    oidc_issuer                   = "https://accounts.google.com"
-    token_request_method          = "POST"
-    token_url                     = "https://www.googleapis.com/oauth2/v4/token"
-    authorize_url                 = "https://accounts.google.com/o/oauth2/v2/auth"
+    authorize_scopes = "email profile openid"
+    client_id        = var.google_client_id
+    client_secret    = var.google_client_secret
   }
 
   attribute_mapping = {
@@ -61,7 +55,7 @@ resource "aws_cognito_identity_provider" "google" {
 resource "aws_cognito_user_pool_client" "client" {
   name                                 = "tennis-frontend-client"
   user_pool_id                         = aws_cognito_user_pool.pool.id
-  allowed_oauth_flows                  = ["code", "implicit"]
+  allowed_oauth_flows                  = ["code"]
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_scopes                 = ["phone", "email", "openid", "profile", "aws.cognito.signin.user.admin"]
   callback_urls                        = ["https://${var.frontend_domain}/"]
