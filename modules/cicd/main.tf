@@ -106,6 +106,12 @@ resource "aws_iam_role_policy" "build_policy" {
         Effect   = "Allow"
         Action   = ["ec2:CreateNetworkInterfacePermission"]
         Resource = "*"
+      },
+      {
+        Sid      = "CodeBuildS3ArtifactAccess"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.pipeline_bucket.arn}/builds/*"]
       }
     ]
   })
@@ -134,6 +140,7 @@ resource "aws_codebuild_project" "backend_build" {
     image                       = "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
     type                        = "LINUX_CONTAINER"
     image_pull_credentials_type = "CODEBUILD"
+    privileged_mode             = true
 
     environment_variable {
       name  = "LAMBDA_FUNCTION_NAME"
@@ -155,6 +162,10 @@ resource "aws_codebuild_project" "backend_build" {
       name  = "DB_PASSWORD"
       value = var.db_password
     }
+    environment_variable {
+      name  = "PIPELINE_BUCKET_NAME"
+      value = aws_s3_bucket.pipeline_bucket.bucket
+    }
   }
 
   source {
@@ -164,8 +175,8 @@ resource "aws_codebuild_project" "backend_build" {
 
   vpc_config {
     vpc_id             = var.vpc_id
-    subnets            = var.private_subnet_ids
-    security_group_ids = [var.lambda_sg_id]
+    subnets            = var.public_subnet_ids
+    security_group_ids = [var.lambda_sg_id, var.codebuild_sg_id]
   }
 }
 

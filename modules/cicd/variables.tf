@@ -21,3 +21,10 @@ variable "vpc_id" { type = string }
 variable "private_subnet_ids" { type = list(string) }
 variable "lambda_sg_id" { type = string }
 variable "random_suffix" { type = string }
+variable "codebuild_sg_id" {
+  type = string
+}
+variable "public_subnet_ids" {
+  description = "List of public subnet IDs"
+  type        = list(string)
+}

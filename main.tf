@@ -3,10 +3,11 @@
 # ==========================================
 
 module "networking" {
-  source       = "./modules/networking"
-  vpc_cidr     = "10.0.0.0/16"
-  region       = var.aws_region
-  lambda_sg_id = module.security.lambda_sg_id
+  source               = "./modules/networking"
+  vpc_cidr             = "10.0.0.0/16"
+  region               = var.aws_region
+  lambda_sg_id         = module.security.lambda_sg_id
+  db_security_group_id = module.security.db_sg_id
 }
 
 # ==========================================
@@ -86,9 +87,10 @@ module "cicd" {
   random_suffix   = module.frontend.random_suffix
 
   # Backend
-  lambda_name    = module.api_backend.lambda_name
-  lambda_arn     = module.api_backend.lambda_arn
-  api_invoke_url = module.api_backend.api_invoke_url
+  lambda_name     = module.api_backend.lambda_name
+  lambda_arn      = module.api_backend.lambda_arn
+  api_invoke_url  = module.api_backend.api_invoke_url
+  codebuild_sg_id = module.networking.codebuild_sg_id
 
   # Database
   db_address  = module.database.db_address
@@ -107,6 +109,7 @@ module "cicd" {
 
   # Networking
   vpc_id             = module.networking.vpc_id
+  public_subnet_ids = module.networking.public_subnet_ids
   private_subnet_ids = module.networking.private_subnet_ids
   lambda_sg_id       = module.security.lambda_sg_id
 }
