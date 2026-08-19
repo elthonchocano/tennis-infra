@@ -140,6 +140,7 @@ resource "aws_codebuild_project" "backend_build" {
     image                       = "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
     type                        = "LINUX_CONTAINER"
     image_pull_credentials_type = "CODEBUILD"
+    privileged_mode             = true
 
     environment_variable {
       name  = "LAMBDA_FUNCTION_NAME"
@@ -174,8 +175,8 @@ resource "aws_codebuild_project" "backend_build" {
 
   vpc_config {
     vpc_id             = var.vpc_id
-    subnets            = var.private_subnet_ids
-    security_group_ids = [var.lambda_sg_id]
+    subnets            = var.public_subnet_ids
+    security_group_ids = [var.lambda_sg_id, var.codebuild_sg_id]
   }
 }
 

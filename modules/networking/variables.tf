@@ -13,3 +13,8 @@ variable "lambda_sg_id" {
   description = "The ID of the security group attached to the Lambda"
   type        = string
 }
+
+variable "db_security_group_id" {
+  description = "The RDS database Security Group ID"
+  type        = string
+}
