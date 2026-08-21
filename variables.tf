@@ -64,3 +64,9 @@ variable "admin_email" {
   type        = string
   default     = "your-email@example.com"
 }
+
+variable "backend_api" {
+  description = "Backend API"
+  type        = string
+  default     = "https://tu-api.com"
+}

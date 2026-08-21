@@ -39,7 +39,7 @@ module "cicd" {
   # Auth configuration for frontend environment variables
   user_pool_client    = module.identity.user_pool_client_id
   user_pool_domain    = module.identity.user_pool_domain
-  api_invoke_url      = "placeholder-backend-url" # We'll wire the real one later
+  api_invoke_url      = var.backend_api
 }
 
 # ==========================================
